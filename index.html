@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 1.5rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 500;
+            color: #f08832;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 1rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: #f8f8f8;
+        }
+
+        .tab.active {
+            background: #f08832;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+            padding: 2rem;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .upload-zone {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: #fcfcfc;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #f08832;
+        }
+
+        .upload-zone h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .upload-zone p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: #f08832;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+            margin: 0.25rem;
+        }
+
+        .btn:hover {
+            background: #e07728;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-outline {
+            background: white;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+
+        .btn-outline:hover {
+            background: #f8f8f8;
+        }
+
+        .file-list {
+            margin: 1rem 0;
+        }
+
+        .file-item {
+            background: #f8f8f8;
+            border-radius: 4px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-info h4 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .file-info p {
+            margin: 0;
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .page-selector {
+            background: #f8f8f8;
+            border-radius: 4px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .page-selector h4 {
+            margin-bottom: 1rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .pages-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .page-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.75rem;
+            text-align: center;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .page-item:hover {
+            border-color: #f08832;
+        }
+
+        .page-item.selected {
+            border-color: #f08832;
+            background: #fff8f5;
+        }
+
+        .page-preview {
+            width: 60px;
+            height: 75px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            margin: 0 auto 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #999;
+        }
+
+        .page-item p {
+            margin: 0;
+            font-size: 0.8rem;
+        }
+
+        .merge-list {
+            min-height: 150px;
+            border: 1px dashed #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            background: #fcfcfc;
+        }
+
+        .merge-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: box-shadow 0.2s;
+        }
+
+        .merge-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .merge-item-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .drag-handle {
+            color: #ccc;
+            font-size: 1.2rem;
+            cursor: grab;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .reorder-pages {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .sortable-page {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            text-align: center;
+            cursor: move;
+            background: white;
+            position: relative;
+            transition: box-shadow 0.2s;
+        }
+
+        .sortable-page:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .sortable-page.dragging {
+            opacity: 0.5;
+        }
+
+        .page-number {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f08832;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            background: #f0f0f0;
+            height: 4px;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            background: #f08832;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .message {
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            display: none;
+            font-size: 0.9rem;
+        }
+
+        .success {
+            background: #f0f9f0;
+            color: #2d5a2d;
+            border: 1px solid #c8e6c9;
+        }
+
+        .error {
+            background: #fdf2f2;
+            color: #a94442;
+            border: 1px solid #f5c6cb;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            border-left: 3px solid #f08832;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .instructions h4 {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .instructions ul {
+            color: #666;
+            padding-left: 1.25rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .pages-grid, .reorder-pages {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PDF Editor</h1>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" data-tab="extract">Wyciągnij strony</button>
+            <button class="tab" data-tab="merge">Połącz PDF-y</button>
+            <button class="tab" data-tab="reorder">Zmień kolejność</button>
+        </div>
+
+        <!-- Extract Pages Tab -->
+        <div class="tab-content active" id="extract">
+            <div class="instructions">
+                <h4>Instrukcje</h4>
+                <ul>
+                    <li>Prześlij plik PDF</li>
+                    <li>Wybierz strony do wyciągnięcia</li>
+                    <li>Pobierz nowy dokument</li>
+                </ul>
+            </div>
+            
+            <div class="upload-zone" onclick="document.getElementById('extractFile').click()">
+                <h3>Wybierz plik PDF</h3>
+                <p>Przeciągnij plik tutaj lub kliknij, aby wybrać</p>
+                <input type="file" id="extractFile" class="file-input" accept=".pdf">
+            </div>
+
+            <div class="file-list" id="extractFileList"></div>
+            
+            <div class="page-selector" id="pageSelector" style="display: none;">
+                <h4>Wybierz strony do wyciągnięcia</h4>
+                <div class="pages-grid" id="pagesGrid"></div>
+                <button class="btn" onclick="extractSelectedPages()">Wyciągnij wybrane strony</button>
+            </div>
+
+            <div class="progress-bar" id="extractProgress" style="display: none;">
+                <div class="progress-fill" id="extractProgressFill"></div>
+            </div>
+
+            <div class="message success" id="extractSuccess"></div>
+            <div class="message error" id="extractError"></div>
+        </div>
+
+        <!-- Merge PDFs Tab -->
+        <div class="tab-content" id="merge">
+            <div class="instructions">
+                <h4>Instrukcje</h4>
+                <ul>
+                    <li>Dodaj kilka plików PDF</li>
+                    <li>Przeciągnij je, aby zmienić kolejność</li>
+                    <li>Kliknij "Połącz PDF-y"</li>
+                </ul>
+            </div>
+
+            <div class="upload-zone" onclick="document.getElementById('mergeFiles').click()">
+                <h3>Dodaj pliki PDF</h3>
+                <p>Można wybrać kilka plików jednocześnie</p>
+                <input type="file" id="mergeFiles" class="file-input" accept=".pdf" multiple>
+            </div>
+
+            <div class="merge-list" id="mergeList">
+                <div class="empty-state">Brak plików do połączenia</div>
+            </div>
+            
+            <button class="btn" onclick="mergePDFs()" id="mergeBtn" disabled>Połącz PDF-y</button>
+            <button class="btn btn-outline" onclick="clearMergeList()">Wyczyść</button>
+
+            <div class="progress-bar" id="mergeProgress" style="display: none;">
+                <div class="progress-fill" id="mergeProgressFill"></div>
+            </div>
+
+            <div class="message success" id="mergeSuccess"></div>
+            <div class="message error" id="mergeError"></div>
+        </div>
+
+        <!-- Reorder Pages Tab -->
+        <div class="tab-content" id="reorder">
+            <div class="instructions">
+                <h4>Instrukcje</h4>
+                <ul>
+                    <li>Prześlij plik PDF</li>
+                    <li>Przeciągnij strony, aby zmienić kolejność</li>
+                    <li>Pobierz dokument z nową kolejnością</li>
+                </ul>
+            </div>
+
+            <div class="upload-zone" onclick="document.getElementById('reorderFile').click()">
+                <h3>Wybierz plik PDF</h3>
+                <p>Przeciągnij plik tutaj lub kliknij, aby wybrać</p>
+                <input type="file" id="reorderFile" class="file-input" accept=".pdf">
+            </div>
+
+            <div class="file-list" id="reorderFileList"></div>
+
+            <div id="reorderContainer" style="display: none;">
+                <h4>Przeciągnij strony, aby zmienić kolejność</h4>
+                <div class="reorder-pages" id="reorderPages"></div>
+                <button class="btn" onclick="saveReorderedPDF()">Zapisz nową kolejność</button>
+            </div>
+
+            <div class="progress-bar" id="reorderProgress" style="display: none;">
+                <div class="progress-fill" id="reorderProgressFill"></div>
+            </div>
+
+            <div class="message success" id="reorderSuccess"></div>
+            <div class="message error" id="reorderError"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPDF = null;
+        let currentPages = [];
+        let selectedPages = new Set();
+        let mergeFiles = [];
+        let reorderPDF = null;
+        let reorderPageOrder = [];
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Drag and drop functionality
+        function setupDragDrop(element, callback) {
+            element.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                element.classList.add('dragover');
+            });
+
+            element.addEventListener('dragleave', () => {
+                element.classList.remove('dragover');
+            });
+
+            element.addEventListener('drop', (e) => {
+                e.preventDefault();
+                element.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+                callback(files);
+            });
+        }
+
+        // Setup drag and drop
+        setupDragDrop(document.querySelector('#extract .upload-zone'), (files) => {
+            if (files.length > 0) handleExtractFile(files[0]);
+        });
+
+        setupDragDrop(document.querySelector('#merge .upload-zone'), handleMergeFiles);
+
+        setupDragDrop(document.querySelector('#reorder .upload-zone'), (files) => {
+            if (files.length > 0) handleReorderFile(files[0]);
+        });
+
+        // File input handlers
+        document.getElementById('extractFile').addEventListener('change', (e) => {
+            if (e.target.files[0]) handleExtractFile(e.target.files[0]);
+        });
+
+        document.getElementById('mergeFiles').addEventListener('change', (e) => {
+            handleMergeFiles(Array.from(e.target.files));
+        });
+
+        document.getElementById('reorderFile').addEventListener('change', (e) => {
+            if (e.target.files[0]) handleReorderFile(e.target.files[0]);
+        });
+
+        // Extract functionality
+        async function handleExtractFile(file) {
+            try {
+                showProgress('extractProgress', 'extractProgressFill', 20);
+                
+                const arrayBuffer = await file.arrayBuffer();
+                currentPDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                const pageCount = currentPDF.getPageCount();
+                
+                showProgress('extractProgress', 'extractProgressFill', 50);
+                
+                // Display file info
+                const fileList = document.getElementById('extractFileList');
+                fileList.innerHTML = `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <h4>${file.name}</h4>
+                            <p>${pageCount} stron • ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Display pages
+                const pagesGrid = document.getElementById('pagesGrid');
+                pagesGrid.innerHTML = '';
+                currentPages = [];
+                selectedPages.clear();
+                
+                for (let i = 0; i < pageCount; i++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'page-item';
+                    pageDiv.innerHTML = `
+                        <div class="page-preview">${i + 1}</div>
+                        <p>Strona ${i + 1}</p>
+                    `;
+                    pageDiv.addEventListener('click', () => togglePage(i, pageDiv));
+                    pagesGrid.appendChild(pageDiv);
+                    currentPages.push(i);
+                }
+                
+                document.getElementById('pageSelector').style.display = 'block';
+                showProgress('extractProgress', 'extractProgressFill', 100);
+                setTimeout(() => hideProgress('extractProgress'), 500);
+                
+            } catch (error) {
+                showError('extractError', 'Błąd podczas ładowania pliku PDF: ' + error.message);
+                hideProgress('extractProgress');
+            }
+        }
+
+        function togglePage(pageIndex, element) {
+            if (selectedPages.has(pageIndex)) {
+                selectedPages.delete(pageIndex);
+                element.classList.remove('selected');
+            } else {
+                selectedPages.add(pageIndex);
+                element.classList.add('selected');
+            }
+        }
+
+        async function extractSelectedPages() {
+            if (selectedPages.size === 0) {
+                showError('extractError', 'Wybierz co najmniej jedną stronę.');
+                return;
+            }
+
+            try {
+                showProgress('extractProgress', 'extractProgressFill', 20);
+                
+                const newPDF = await PDFLib.PDFDocument.create();
+                const sortedPages = Array.from(selectedPages).sort((a, b) => a - b);
+                
+                showProgress('extractProgress', 'extractProgressFill', 40);
+                
+                const copiedPages = await newPDF.copyPages(currentPDF, sortedPages);
+                copiedPages.forEach(page => newPDF.addPage(page));
+                
+                showProgress('extractProgress', 'extractProgressFill', 80);
+                
+                const pdfBytes = await newPDF.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `extracted_pages_${Date.now()}.pdf`;
+                a.click();
+                
+                showProgress('extractProgress', 'extractProgressFill', 100);
+                showSuccess('extractSuccess', `Pomyślnie wyciągnięto ${selectedPages.size} stron.`);
+                
+                setTimeout(() => {
+                    hideProgress('extractProgress');
+                    hideMessage('extractSuccess');
+                }, 2000);
+                
+            } catch (error) {
+                showError('extractError', 'Błąd podczas wyciągania stron: ' + error.message);
+                hideProgress('extractProgress');
+            }
+        }
+
+        // Merge functionality
+        function handleMergeFiles(files) {
+            files.forEach(file => {
+                if (!mergeFiles.find(f => f.file.name === file.name)) {
+                    mergeFiles.push({ file, id: Date.now() + Math.random() });
+                }
+            });
+            updateMergeList();
+        }
+
+        function updateMergeList() {
+            const mergeList = document.getElementById('mergeList');
+            const mergeBtn = document.getElementById('mergeBtn');
+            
+            if (mergeFiles.length === 0) {
+                mergeList.innerHTML = '<div class="empty-state">Brak plików do połączenia</div>';
+                mergeBtn.disabled = true;
+                return;
+            }
+            
+            mergeList.innerHTML = '';
+            mergeFiles.forEach((fileObj, index) => {
+                const item = document.createElement('div');
+                item.className = 'merge-item';
+                item.draggable = true;
+                item.innerHTML = `
+                    <div class="merge-item-info">
+                        <span class="drag-handle">⋮⋮</span>
+                        <div>
+                            <h4>${fileObj.file.name}</h4>
+                            <p>${(fileObj.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline" onclick="removeMergeFile(${index})">Usuń</button>
+                `;
+                
+                // Drag and drop for reordering
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', index);
+                });
+                
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                    const dropIndex = index;
+                    
+                    if (dragIndex !== dropIndex) {
+                        const draggedFile = mergeFiles[dragIndex];
+                        mergeFiles.splice(dragIndex, 1);
+                        mergeFiles.splice(dropIndex, 0, draggedFile);
+                        updateMergeList();
+                    }
+                });
+                
+                mergeList.appendChild(item);
+            });
+            
+            mergeBtn.disabled = mergeFiles.length < 2;
+        }
+
+        function removeMergeFile(index) {
+            mergeFiles.splice(index, 1);
+            updateMergeList();
+        }
+
+        function clearMergeList() {
+            mergeFiles = [];
+            updateMergeList();
+        }
+
+        async function mergePDFs() {
+            if (mergeFiles.length < 2) {
+                showError('mergeError', 'Dodaj co najmniej 2 pliki PDF.');
+                return;
+            }
+
+            try {
+                showProgress('mergeProgress', 'mergeProgressFill', 10);
+                
+                const newPDF = await PDFLib.PDFDocument.create();
+                
+                for (let i = 0; i < mergeFiles.length; i++) {
+                    const fileObj = mergeFiles[i];
+                    const arrayBuffer = await fileObj.file.arrayBuffer();
+                    const pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+                    
+                    const pages = await newPDF.copyPages(pdf, pdf.getPageIndices());
+                    pages.forEach(page => newPDF.addPage(page));
+                    
+                    showProgress('mergeProgress', 'mergeProgressFill', 10 + (i + 1) / mergeFiles.length * 70);
+                }
+                
+                showProgress('mergeProgress', 'mergeProgressFill', 90);
+                
+                const pdfBytes = await newPDF.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `merged_pdf_${Date.now()}.pdf`;
+                a.click();
+                
+                showProgress('mergeProgress', 'mergeProgressFill', 100);
+                showSuccess('mergeSuccess', `Pomyślnie połączono ${mergeFiles.length} plików.`);
+                
+                setTimeout(() => {
+                    hideProgress('mergeProgress');
+                    hideMessage('mergeSuccess');
+                }, 2000);
+                
+            } catch (error) {
+                showError('mergeError', 'Błąd podczas łączenia plików: ' + error.message);
+                hideProgress('mergeProgress');
+            }
+        }
+
+        // Reorder functionality
+        async function handleReorderFile(file) {
+            try {
+                showProgress('reorderProgress', 'reorderProgressFill', 20);
+                
+                const arrayBuffer = await file.arrayBuffer();
+                reorderPDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                const pageCount = reorderPDF.getPageCount();
+                
+                showProgress('reorderProgress', 'reorderProgressFill', 50);
+                
+                const fileList = document.getElementById('reorderFileList');
+                fileList.innerHTML = `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <h4>${file.name}</h4>
+                            <p>${pageCount} stron • ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                    </div>
+                `;
+                
+                const reorderPages = document.getElementById('reorderPages');
+                reorderPages.innerHTML = '';
+                reorderPageOrder = [];
+                
+                for (let i = 0; i < pageCount; i++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'sortable-page';
+                    pageDiv.draggable = true;
+                    pageDiv.dataset.pageIndex = i;
+                    pageDiv.innerHTML = `
+                        <div class="page-number">${i + 1}</div>
+                        <div class="page-preview">${i + 1}</div>
+                        <p>Strona ${i + 1}</p>
+                    `;
+                    
+                    pageDiv.addEventListener('dragstart', handleDragStart);
+                    pageDiv.addEventListener('dragover', handleDragOver);
+                    pageDiv.addEventListener('drop', handleDrop);
+                    pageDiv.addEventListener('dragend', handleDragEnd);
+                    
+                    reorderPages.appendChild(pageDiv);
+                    reorderPageOrder.push(i);
+                }
+                
+                document.getElementById('reorderContainer').style.display = 'block';
+                showProgress('reorderProgress', 'reorderProgressFill', 100);
+                setTimeout(() => hideProgress('reorderProgress'), 500);
+                
+            } catch (error) {
+                showError('reorderError', 'Błąd podczas ładowania pliku: ' + error.message);
+                hideProgress('reorderProgress');
+            }
+        }
+
+        // Drag and drop handlers for reordering
+        let draggedElement = null;
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            if (draggedElement !== this) {
+                const draggedIndex = parseInt(draggedElement.dataset.pageIndex);
+                const targetIndex = parseInt(this.dataset.pageIndex);
+                
+                const draggedPageIndex = reorderPageOrder[draggedIndex];
+                reorderPageOrder.splice(draggedIndex, 1);
+                reorderPageOrder.splice(targetIndex, 0, draggedPageIndex);
+                
+                rebuildReorderPages();
+            }
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            draggedElement = null;
+        }
+
+        function rebuildReorderPages() {
+            const reorderPages = document.getElementById('reorderPages');
+            reorderPages.innerHTML = '';
+            
+            reorderPageOrder.forEach((originalIndex, newIndex) => {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'sortable-page';
+                pageDiv.draggable = true;
+                pageDiv.dataset.pageIndex = newIndex;
+                pageDiv.innerHTML = `
+                    <div class="page-number">${newIndex + 1}</div>
+                    <div class="page-preview">${originalIndex + 1}</div>
+                    <p>Oryginalna: ${originalIndex + 1}</p>
+                `;
+                
+                pageDiv.addEventListener('dragstart', handleDragStart);
+                pageDiv.addEventListener('dragover', handleDragOver);
+                pageDiv.addEventListener('drop', handleDrop);
+                pageDiv.addEventListener('dragend', handleDragEnd);
+                
+                re
