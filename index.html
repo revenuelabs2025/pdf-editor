@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js';
+    </script>
     <style>
         * {
             margin: 0;
@@ -181,7 +186,7 @@
 
         .pages-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 1rem;
             margin: 1rem 0;
         }
@@ -206,8 +211,8 @@
         }
 
         .page-preview {
-            width: 60px;
-            height: 75px;
+            width: 100px;
+            height: 130px;
             background: #f0f0f0;
             border-radius: 2px;
             margin: 0 auto 0.5rem;
@@ -216,6 +221,13 @@
             justify-content: center;
             font-size: 0.7rem;
             color: #999;
+            overflow: hidden;
+        }
+
+        .page-preview canvas {
+            width: 100%;
+            height: auto;
+            display: block;
         }
 
         .page-item p {
@@ -266,7 +278,7 @@
 
         .reorder-pages {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 1rem;
             margin: 1rem 0;
         }
@@ -385,7 +397,7 @@
             }
             
             .pages-grid, .reorder-pages {
-                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             }
         }
     </style>
@@ -504,10 +516,12 @@
     <script>
         // Global variables
         let currentPDF = null;
+        let currentPDFJS = null;
         let currentPages = [];
         let selectedPages = new Set();
         let mergeFiles = [];
         let reorderPDF = null;
+        let reorderPDFJS = null;
         let reorderPageOrder = [];
 
         // Tab switching
@@ -571,6 +585,7 @@
                 
                 const arrayBuffer = await file.arrayBuffer();
                 currentPDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                currentPDFJS = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const pageCount = currentPDF.getPageCount();
                 
                 showProgress('extractProgress', 'extractProgressFill', 50);
@@ -595,12 +610,16 @@
                 for (let i = 0; i < pageCount; i++) {
                     const pageDiv = document.createElement('div');
                     pageDiv.className = 'page-item';
-                    pageDiv.innerHTML = `
-                        <div class="page-preview">${i + 1}</div>
-                        <p>Strona ${i + 1}</p>
-                    `;
+                    const preview = document.createElement('div');
+                    preview.className = 'page-preview';
+                    preview.textContent = i + 1;
+                    const label = document.createElement('p');
+                    label.textContent = `Strona ${i + 1}`;
+                    pageDiv.appendChild(preview);
+                    pageDiv.appendChild(label);
                     pageDiv.addEventListener('click', () => togglePage(i, pageDiv));
                     pagesGrid.appendChild(pageDiv);
+                    renderThumbnail(preview, currentPDFJS, i + 1);
                     currentPages.push(i);
                 }
                 
@@ -794,6 +813,7 @@
                 
                 const arrayBuffer = await file.arrayBuffer();
                 reorderPDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                reorderPDFJS = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const pageCount = reorderPDF.getPageCount();
                 
                 showProgress('reorderProgress', 'reorderProgressFill', 50);
@@ -817,18 +837,29 @@
                     pageDiv.className = 'sortable-page';
                     pageDiv.draggable = true;
                     pageDiv.dataset.pageIndex = i;
-                    pageDiv.innerHTML = `
-                        <div class="page-number">${i + 1}</div>
-                        <div class="page-preview">${i + 1}</div>
-                        <p>Strona ${i + 1}</p>
-                    `;
-                    
+
+                    const number = document.createElement('div');
+                    number.className = 'page-number';
+                    number.textContent = i + 1;
+
+                    const preview = document.createElement('div');
+                    preview.className = 'page-preview';
+                    preview.textContent = i + 1;
+
+                    const label = document.createElement('p');
+                    label.textContent = `Strona ${i + 1}`;
+
+                    pageDiv.appendChild(number);
+                    pageDiv.appendChild(preview);
+                    pageDiv.appendChild(label);
+
                     pageDiv.addEventListener('dragstart', handleDragStart);
                     pageDiv.addEventListener('dragover', handleDragOver);
                     pageDiv.addEventListener('drop', handleDrop);
                     pageDiv.addEventListener('dragend', handleDragEnd);
-                    
+
                     reorderPages.appendChild(pageDiv);
+                    renderThumbnail(preview, reorderPDFJS, i + 1);
                     reorderPageOrder.push(i);
                 }
                 
@@ -891,18 +922,29 @@
                 pageDiv.className = 'sortable-page';
                 pageDiv.draggable = true;
                 pageDiv.dataset.pageIndex = newIndex;
-                pageDiv.innerHTML = `
-                    <div class="page-number">${newIndex + 1}</div>
-                    <div class="page-preview">${originalIndex + 1}</div>
-                    <p>Oryginalna: ${originalIndex + 1}</p>
-                `;
-                
+
+                const number = document.createElement('div');
+                number.className = 'page-number';
+                number.textContent = newIndex + 1;
+
+                const preview = document.createElement('div');
+                preview.className = 'page-preview';
+                preview.textContent = originalIndex + 1;
+
+                const label = document.createElement('p');
+                label.textContent = `Oryginalna: ${originalIndex + 1}`;
+
+                pageDiv.appendChild(number);
+                pageDiv.appendChild(preview);
+                pageDiv.appendChild(label);
+
                 pageDiv.addEventListener('dragstart', handleDragStart);
                 pageDiv.addEventListener('dragover', handleDragOver);
                 pageDiv.addEventListener('drop', handleDrop);
                 pageDiv.addEventListener('dragend', handleDragEnd);
 
                 reorderPages.appendChild(pageDiv);
+                renderThumbnail(preview, reorderPDFJS, originalIndex + 1);
             });
         }
 
@@ -969,6 +1011,27 @@
             if (el) {
                 el.style.display = 'none';
                 el.textContent = '';
+            }
+        }
+
+        /**
+         * Render a PDF page thumbnail inside a container element.
+         * @param {HTMLElement} container - Element that will hold the thumbnail.
+         * @param {object} pdfDoc - PDF.js document instance.
+         * @param {number} pageNumber - 1-based page number to render.
+         */
+        async function renderThumbnail(container, pdfDoc, pageNumber) {
+            try {
+                const page = await pdfDoc.getPage(pageNumber);
+                const viewport = page.getViewport({ scale: 0.3 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                container.innerHTML = '';
+                container.appendChild(canvas);
+            } catch (e) {
+                console.error('Thumbnail error', e);
             }
         }
 
