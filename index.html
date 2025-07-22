@@ -901,5 +901,116 @@
                 pageDiv.addEventListener('dragover', handleDragOver);
                 pageDiv.addEventListener('drop', handleDrop);
                 pageDiv.addEventListener('dragend', handleDragEnd);
-                
-                re
+
+                reorderPages.appendChild(pageDiv);
+            });
+        }
+
+        /**
+         * Display a progress bar and update its fill percentage.
+         * @param {string} barId - ID of the progress bar container.
+         * @param {string} fillId - ID of the progress fill element.
+         * @param {number} percentage - Progress value from 0 to 100.
+         */
+        function showProgress(barId, fillId, percentage) {
+            const bar = document.getElementById(barId);
+            const fill = document.getElementById(fillId);
+            if (bar && fill) {
+                bar.style.display = 'block';
+                fill.style.width = `${Math.min(Math.max(percentage, 0), 100)}%`;
+            }
+        }
+
+        /**
+         * Hide the specified progress bar.
+         * @param {string} barId - ID of the progress bar container.
+         */
+        function hideProgress(barId) {
+            const bar = document.getElementById(barId);
+            if (bar) {
+                const fill = bar.querySelector('.progress-fill');
+                if (fill) fill.style.width = '0%';
+                bar.style.display = 'none';
+            }
+        }
+
+        /**
+         * Show a success message inside an element.
+         * @param {string} id - ID of the element that will contain the message.
+         * @param {string} msg - Message text to display.
+         */
+        function showSuccess(id, msg) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = msg;
+                el.style.display = 'block';
+            }
+        }
+
+        /**
+         * Show an error message inside an element.
+         * @param {string} id - ID of the element that will contain the message.
+         * @param {string} msg - Message text to display.
+         */
+        function showError(id, msg) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = msg;
+                el.style.display = 'block';
+            }
+        }
+
+        /**
+         * Hide a previously displayed message element.
+         * @param {string} id - ID of the element to hide.
+         */
+        function hideMessage(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = 'none';
+                el.textContent = '';
+            }
+        }
+
+        /**
+         * Create a new PDF based on the current reorder order and download it.
+         */
+        async function saveReorderedPDF() {
+            if (!reorderPDF || reorderPageOrder.length === 0) {
+                showError('reorderError', 'Brak stron do zapisania.');
+                return;
+            }
+
+            try {
+                showProgress('reorderProgress', 'reorderProgressFill', 10);
+
+                const newPDF = await PDFLib.PDFDocument.create();
+                const pages = await newPDF.copyPages(reorderPDF, reorderPageOrder);
+                pages.forEach(page => newPDF.addPage(page));
+
+                showProgress('reorderProgress', 'reorderProgressFill', 90);
+
+                const pdfBytes = await newPDF.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `reordered_pdf_${Date.now()}.pdf`;
+                a.click();
+
+                showProgress('reorderProgress', 'reorderProgressFill', 100);
+                showSuccess('reorderSuccess', 'Zapisano nową kolejność stron.');
+
+                setTimeout(() => {
+                    hideProgress('reorderProgress');
+                    hideMessage('reorderSuccess');
+                }, 2000);
+            } catch (error) {
+                showError('reorderError', 'Błąd podczas zapisywania pliku: ' + error.message);
+                hideProgress('reorderProgress');
+            }
+        }
+</script>
+</body>
+</html>
