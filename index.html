@@ -410,6 +410,7 @@
     <div class="container">
         <div class="tabs">
             <button class="tab active" data-tab="extract">Wyciągnij strony</button>
+            <button class="tab" data-tab="remove">Usuń strony</button>
             <button class="tab" data-tab="merge">Połącz PDF-y</button>
             <button class="tab" data-tab="reorder">Zmień kolejność</button>
         </div>
@@ -444,7 +445,40 @@
             </div>
 
             <div class="message success" id="extractSuccess"></div>
-            <div class="message error" id="extractError"></div>
+        <div class="message error" id="extractError"></div>
+        </div>
+
+        <!-- Remove Pages Tab -->
+        <div class="tab-content" id="remove">
+            <div class="instructions">
+                <h4>Instrukcje</h4>
+                <ul>
+                    <li>Prześlij plik PDF</li>
+                    <li>Wybierz strony do usunięcia</li>
+                    <li>Pobierz nowy dokument</li>
+                </ul>
+            </div>
+
+            <div class="upload-zone" onclick="document.getElementById('removeFile').click()">
+                <h3>Wybierz plik PDF</h3>
+                <p>Przeciągnij plik tutaj lub kliknij, aby wybrać</p>
+                <input type="file" id="removeFile" class="file-input" accept=".pdf">
+            </div>
+
+            <div class="file-list" id="removeFileList"></div>
+
+            <div class="page-selector" id="removePageSelector" style="display: none;">
+                <h4>Wybierz strony do usunięcia</h4>
+                <div class="pages-grid" id="removePagesGrid"></div>
+                <button class="btn" onclick="deleteSelectedPages()">Usuń wybrane strony</button>
+            </div>
+
+            <div class="progress-bar" id="removeProgress" style="display: none;">
+                <div class="progress-fill" id="removeProgressFill"></div>
+            </div>
+
+            <div class="message success" id="removeSuccess"></div>
+            <div class="message error" id="removeError"></div>
         </div>
 
         <!-- Merge PDFs Tab -->
@@ -519,6 +553,9 @@
         let currentPDFJS = null;
         let currentPages = [];
         let selectedPages = new Set();
+        let removePDF = null;
+        let removePDFJS = null;
+        let removeSelectedPages = new Set();
         let mergeFiles = [];
         let reorderPDF = null;
         let reorderPDFJS = null;
@@ -559,6 +596,10 @@
             if (files.length > 0) handleExtractFile(files[0]);
         });
 
+        setupDragDrop(document.querySelector('#remove .upload-zone'), (files) => {
+            if (files.length > 0) handleRemoveFile(files[0]);
+        });
+
         setupDragDrop(document.querySelector('#merge .upload-zone'), handleMergeFiles);
 
         setupDragDrop(document.querySelector('#reorder .upload-zone'), (files) => {
@@ -568,6 +609,10 @@
         // File input handlers
         document.getElementById('extractFile').addEventListener('change', (e) => {
             if (e.target.files[0]) handleExtractFile(e.target.files[0]);
+        });
+
+        document.getElementById('removeFile').addEventListener('change', (e) => {
+            if (e.target.files[0]) handleRemoveFile(e.target.files[0]);
         });
 
         document.getElementById('mergeFiles').addEventListener('change', (e) => {
@@ -682,6 +727,116 @@
             } catch (error) {
                 showError('extractError', 'Błąd podczas wyciągania stron: ' + error.message);
                 hideProgress('extractProgress');
+            }
+        }
+
+        // Remove pages functionality
+        async function handleRemoveFile(file) {
+            try {
+                showProgress('removeProgress', 'removeProgressFill', 20);
+
+                const arrayBuffer = await file.arrayBuffer();
+                removePDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                removePDFJS = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const pageCount = removePDF.getPageCount();
+
+                showProgress('removeProgress', 'removeProgressFill', 50);
+
+                const fileList = document.getElementById('removeFileList');
+                fileList.innerHTML = `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <h4>${file.name}</h4>
+                            <p>${pageCount} stron • ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                    </div>
+                `;
+
+                const pagesGrid = document.getElementById('removePagesGrid');
+                pagesGrid.innerHTML = '';
+                removeSelectedPages.clear();
+
+                for (let i = 0; i < pageCount; i++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'page-item';
+                    const preview = document.createElement('div');
+                    preview.className = 'page-preview';
+                    preview.textContent = i + 1;
+                    const label = document.createElement('p');
+                    label.textContent = `Strona ${i + 1}`;
+                    pageDiv.appendChild(preview);
+                    pageDiv.appendChild(label);
+                    pageDiv.addEventListener('click', () => toggleRemovePage(i, pageDiv));
+                    pagesGrid.appendChild(pageDiv);
+                    renderThumbnail(preview, removePDFJS, i + 1);
+                }
+
+                document.getElementById('removePageSelector').style.display = 'block';
+                showProgress('removeProgress', 'removeProgressFill', 100);
+                setTimeout(() => hideProgress('removeProgress'), 500);
+
+            } catch (error) {
+                showError('removeError', 'Błąd podczas ładowania pliku PDF: ' + error.message);
+                hideProgress('removeProgress');
+            }
+        }
+
+        function toggleRemovePage(pageIndex, element) {
+            if (removeSelectedPages.has(pageIndex)) {
+                removeSelectedPages.delete(pageIndex);
+                element.classList.remove('selected');
+            } else {
+                removeSelectedPages.add(pageIndex);
+                element.classList.add('selected');
+            }
+        }
+
+        async function deleteSelectedPages() {
+            if (!removePDF) {
+                showError('removeError', 'Brak wczytanego pliku.');
+                return;
+            }
+            if (removeSelectedPages.size === 0) {
+                showError('removeError', 'Wybierz co najmniej jedną stronę do usunięcia.');
+                return;
+            }
+
+            try {
+                showProgress('removeProgress', 'removeProgressFill', 20);
+
+                const pageCount = removePDF.getPageCount();
+                const pagesToKeep = [];
+                for (let i = 0; i < pageCount; i++) {
+                    if (!removeSelectedPages.has(i)) pagesToKeep.push(i);
+                }
+
+                showProgress('removeProgress', 'removeProgressFill', 40);
+
+                const newPDF = await PDFLib.PDFDocument.create();
+                const copiedPages = await newPDF.copyPages(removePDF, pagesToKeep);
+                copiedPages.forEach(p => newPDF.addPage(p));
+
+                showProgress('removeProgress', 'removeProgressFill', 80);
+
+                const pdfBytes = await newPDF.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `removed_pages_${Date.now()}.pdf`;
+                a.click();
+
+                showProgress('removeProgress', 'removeProgressFill', 100);
+                showSuccess('removeSuccess', `Usunięto ${removeSelectedPages.size} stron.`);
+
+                setTimeout(() => {
+                    hideProgress('removeProgress');
+                    hideMessage('removeSuccess');
+                }, 2000);
+            } catch (error) {
+                showError('removeError', 'Błąd podczas usuwania stron: ' + error.message);
+                hideProgress('removeProgress');
             }
         }
 
